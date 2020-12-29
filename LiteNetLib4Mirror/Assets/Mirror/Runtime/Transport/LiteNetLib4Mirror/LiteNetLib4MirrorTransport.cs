@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using LiteNetLib4Mirror.Open.Nat;
@@ -7,7 +8,7 @@ using UnityEngine;
 
 namespace Mirror.LiteNetLib4Mirror
 {
-	public class LiteNetLib4MirrorTransport : Transport, ISegmentTransport
+	public class LiteNetLib4MirrorTransport : Transport
 	{
 		public static LiteNetLib4MirrorTransport Singleton;
 
@@ -30,6 +31,11 @@ namespace Mirror.LiteNetLib4Mirror
 		[Rename("Use UPnP")]
 #endif
 		public bool useUpnP = true;
+#if UNITY_EDITOR
+		[Rename("Force Local Machine Address")]
+		[Tooltip("Force the server IPv4 address to use your machine's local address. Useful if using UPnP")]
+#endif
+		public bool forceLocalAddressForUpnP = true;
 		public ushort maxConnections = 20;
 #if !DISABLE_IPV6
 #if UNITY_EDITOR
@@ -124,7 +130,7 @@ namespace Mirror.LiteNetLib4Mirror
 
 		protected internal virtual void ProcessConnectionRequest(ConnectionRequest request)
 		{
-			if (LiteNetLib4MirrorCore.Host.PeersCount >= maxConnections)
+			if (LiteNetLib4MirrorCore.Host.ConnectedPeersCount >= maxConnections)
 			{
 				request.Reject();
 			}
@@ -180,6 +186,30 @@ namespace Mirror.LiteNetLib4Mirror
 		#endregion
 
 		#region Transport Overrides
+		public const string Scheme = "litenet";
+
+		public override Uri ServerUri()
+		{
+			UriBuilder builder = new UriBuilder();
+			builder.Scheme = Scheme;
+			builder.Host = Dns.GetHostName();
+			builder.Port = port;
+			return builder.Uri;
+		}
+
+		public override void ClientConnect(Uri uri)
+		{
+			if (uri.Scheme != Scheme)
+				throw new ArgumentException($"Invalid url {uri}, use {Scheme}://host:port instead", nameof(uri));
+
+			port = uri.IsDefaultPort ? port : (ushort)uri.Port;
+			clientAddress = uri.Host;
+
+			ConnectWriter.Reset();
+			GetConnectData(ConnectWriter);
+			LiteNetLib4MirrorClient.ConnectClient(ConnectWriter);
+		}
+
 		public override bool Available()
 		{
 			return Application.platform != RuntimePlatform.WebGLPlayer;
@@ -198,10 +228,10 @@ namespace Mirror.LiteNetLib4Mirror
 			LiteNetLib4MirrorClient.ConnectClient(ConnectWriter);
 		}
 
-		public override bool ClientSend(int channelId, ArraySegment<byte> data)
+		public override void ClientSend(int channelId, ArraySegment<byte> data)
 		{
 			byte channel = (byte)(channelId < channels.Length ? channelId : 0);
-			return LiteNetLib4MirrorClient.Send(channels[0], data.Array, data.Offset, data.Count, channel);
+			LiteNetLib4MirrorClient.Send(channels[0], data.Array, data.Offset, data.Count, channel);
 		}
 
 		public override void ClientDisconnect()
@@ -222,21 +252,11 @@ namespace Mirror.LiteNetLib4Mirror
 			LiteNetLib4MirrorServer.StartServer(GetConnectKey());
 		}
 
-		public override bool ServerSend(List<int> connectionIds, int channelId, ArraySegment<byte> data)
-		{
+		public override void ServerSend(int connectionId, int channelId, ArraySegment<byte> segment) {
 			byte channel = (byte)(channelId < channels.Length ? channelId : 0);
-			bool success = true;
-			foreach (int id in connectionIds)
-			{
-				success &= LiteNetLib4MirrorServer.Send(id, channels[0], data.Array, data.Offset, data.Count, channel);
+			if (!LiteNetLib4MirrorServer.Send(connectionId, channels[0], segment.Array, segment.Offset, segment.Count, channel)) {
+				Debug.Log($"LNL: Server failed to send for connectionId{connectionId}");
 			}
-			return success;
-		}
-
-		public bool ServerSend(int connectionId, int channelId, ArraySegment<byte> data)
-		{
-			byte channel = (byte)(channelId < channels.Length ? channelId : 0);
-			return LiteNetLib4MirrorServer.Send(connectionId, channels[0], data.Array, data.Offset, data.Count, channel);
 		}
 
 		public override bool ServerDisconnect(int connectionId)

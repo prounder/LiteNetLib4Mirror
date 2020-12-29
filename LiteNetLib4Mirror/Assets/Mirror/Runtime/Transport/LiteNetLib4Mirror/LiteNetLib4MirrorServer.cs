@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using LiteNetLib;
 using LiteNetLib.Utils;
 using UnityEngine;
@@ -48,10 +49,18 @@ namespace Mirror.LiteNetLib4Mirror
 				{
 					LiteNetLib4MirrorUtils.ForwardPort();
 				}
+				IPAddress serverIPv4BindAddress = LiteNetLib4MirrorUtils.Parse(LiteNetLib4MirrorTransport.Singleton.serverIPv4BindAddress);
+				if (LiteNetLib4MirrorTransport.Singleton.forceLocalAddressForUpnP) 
+				{
+					IPAddress oldAddress = serverIPv4BindAddress;
+					serverIPv4BindAddress = Task.Run(() => LiteNetLib4MirrorUtils.GetLocalIP()).GetAwaiter().GetResult();
+					Debug.Log("Overriding the set IPv4 address (" + oldAddress + ") with the machine's local address (" + serverIPv4BindAddress + ")");	
+				}
+
 #if DISABLE_IPV6
-				LiteNetLib4MirrorCore.Host.Start(LiteNetLib4MirrorUtils.Parse(LiteNetLib4MirrorTransport.Singleton.serverIPv4BindAddress), IPAddress.IPv6None, LiteNetLib4MirrorTransport.Singleton.port);
+				LiteNetLib4MirrorCore.Host.Start(serverIPv4BindAddress, IPAddress.IPv6None, LiteNetLib4MirrorTransport.Singleton.port);
 #else
-				LiteNetLib4MirrorCore.Host.Start(LiteNetLib4MirrorUtils.Parse(LiteNetLib4MirrorTransport.Singleton.serverIPv4BindAddress), LiteNetLib4MirrorUtils.Parse(LiteNetLib4MirrorTransport.Singleton.serverIPv6BindAddress), LiteNetLib4MirrorTransport.Singleton.port);
+				LiteNetLib4MirrorCore.Host.Start(serverIPv4BindAddress, LiteNetLib4MirrorUtils.Parse(LiteNetLib4MirrorTransport.Singleton.serverIPv6BindAddress), LiteNetLib4MirrorTransport.Singleton.port);
 #endif
 				Peers = new NetPeer[LiteNetLib4MirrorTransport.Singleton.maxConnections * 2];
 				LiteNetLib4MirrorTransport.Polling = true;

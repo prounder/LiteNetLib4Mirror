@@ -99,6 +99,18 @@ namespace LiteNetLib4Mirror.Open.Nat
 		public abstract Task<IPAddress> GetExternalIPAsync();
 
 		/// <summary>
+		/// Gets the local machine's IP address. This is the host machine's IP address inside the network.
+		/// </summary>
+		/// <returns>
+		/// The local address
+		/// </returns>
+		/// <example>
+		/// Console.WriteLine("My local IP is: {0}", device.GetLocalIP());
+		/// </example>
+		/// <exception cref="MappingException">MappingException</exception>
+		public abstract IPAddress GetLocalIP();
+
+		/// <summary>
 		/// Gets the specified mapping asynchronous.
 		/// </summary>
 		/// <param name="networkProtocolType">The protocol.</param>

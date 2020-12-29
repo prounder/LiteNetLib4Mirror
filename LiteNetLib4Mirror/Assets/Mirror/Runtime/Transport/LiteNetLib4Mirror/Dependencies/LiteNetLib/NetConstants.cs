@@ -44,12 +44,12 @@
         public const int HeaderSize = 1;
         public const int ChanneledHeaderSize = 4;
         public const int FragmentHeaderSize = 6;
-        public const int FragmentTotalSize = ChanneledHeaderSize + FragmentHeaderSize;
+        public const int FragmentedHeaderTotalSize = ChanneledHeaderSize + FragmentHeaderSize;
         public const ushort MaxSequence = 32768;
         public const ushort HalfMaxSequence = MaxSequence / 2;
 
         //protocol
-        internal const int ProtocolId = 10;
+        internal const int ProtocolId = 11;
         internal const int MaxUdpHeaderSize = 68;
 
         internal static readonly int[] PossibleMtu =

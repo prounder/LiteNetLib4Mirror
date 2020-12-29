@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using LiteNetLib.Utils;
 
 namespace LiteNetLib
@@ -14,21 +15,55 @@ namespace LiteNetLib
         ConnectAccept,
         Disconnect,
         UnconnectedMessage,
-        NatIntroductionRequest,
-        NatIntroduction,
-        NatPunchMessage,
         MtuCheck,
         MtuOk,
         Broadcast,
         Merged,
         ShutdownOk,
         PeerNotFound,
-        InvalidProtocol
+        InvalidProtocol,
+        NatMessage,
+        Empty
     }
 
     internal sealed class NetPacket
     {
         private static readonly int LastProperty = Enum.GetValues(typeof(PacketProperty)).Length;
+        private static readonly int[] HeaderSizes;
+
+        static NetPacket()
+        {
+            HeaderSizes = new int[LastProperty+1];
+            for (int i = 0; i < HeaderSizes.Length; i++)
+            {
+                switch ((PacketProperty)i)
+                {
+                    case PacketProperty.Channeled:
+                    case PacketProperty.Ack:
+                        HeaderSizes[i] = NetConstants.ChanneledHeaderSize;
+                        break;
+                    case PacketProperty.Ping:
+                        HeaderSizes[i] = NetConstants.HeaderSize + 2;
+                        break;
+                    case PacketProperty.ConnectRequest:
+                        HeaderSizes[i] = NetConnectRequestPacket.HeaderSize;
+                        break;
+                    case PacketProperty.ConnectAccept:
+                        HeaderSizes[i] = NetConnectAcceptPacket.Size;
+                        break;
+                    case PacketProperty.Disconnect:
+                        HeaderSizes[i] = NetConstants.HeaderSize + 8;
+                        break;
+                    case PacketProperty.Pong:
+                        HeaderSizes[i] = NetConstants.HeaderSize + 10;
+                        break;
+                    default:
+                        HeaderSizes[i] = NetConstants.HeaderSize;
+                        break;
+                }
+            }
+        }
+
         //Header
         public PacketProperty Property
         {
@@ -84,15 +119,18 @@ namespace LiteNetLib
 
         //Data
         public byte[] RawData;
-        public ushort Size;
+        public int Size;
 
         //Delivery
         public object UserData;
 
+        //Pool node
+        public NetPacket Next;
+
         public NetPacket(int size)
         {
             RawData = new byte[size];
-            Size = (ushort)size;
+            Size = size;
         }
 
         public NetPacket(PacketProperty property, int size)
@@ -100,55 +138,26 @@ namespace LiteNetLib
             size += GetHeaderSize(property);
             RawData = new byte[size];
             Property = property;
-            Size = (ushort)size;
-        }
-
-        public void Realloc(int toSize, bool clear)
-        {
-            Size = (ushort)toSize;
-            if (RawData.Length < toSize)
-            {
-                RawData = new byte[toSize];
-                return;
-            }
-            if (clear)  //clear not reallocated
-                Array.Clear(RawData, 0, toSize);
+            Size = size;
         }
 
         public static int GetHeaderSize(PacketProperty property)
         {
-            switch (property)
-            {
-                case PacketProperty.Channeled:
-                case PacketProperty.Ack:
-                    return NetConstants.ChanneledHeaderSize;
-                case PacketProperty.Ping:
-                    return NetConstants.HeaderSize + 2;
-                case PacketProperty.ConnectRequest:
-                    return NetConnectRequestPacket.HeaderSize;
-                case PacketProperty.ConnectAccept:
-                    return NetConnectAcceptPacket.Size;
-                case PacketProperty.Disconnect:
-                    return NetConstants.HeaderSize + 8;
-                case PacketProperty.Pong:
-                    return NetConstants.HeaderSize + 10;
-                default:
-                    return NetConstants.HeaderSize;
-            }
+            return HeaderSizes[(int)property];
         }
 
         public int GetHeaderSize()
         {
-            return GetHeaderSize(Property);
+            return HeaderSizes[RawData[0] & 0x1F];
         }
 
-        //Packet contstructor from byte array
+        //Packet constructor from byte array
         public bool FromBytes(byte[] data, int start, int packetSize)
         {
             //Reading property
             byte property = (byte)(data[start] & 0x1F);
             bool fragmented = (data[start] & 0x80) != 0;
-            int headerSize = GetHeaderSize((PacketProperty) property);
+            int headerSize = HeaderSizes[property];
 
             if (property > LastProperty || packetSize < headerSize ||
                (fragmented && packetSize < headerSize + NetConstants.FragmentHeaderSize) ||
@@ -165,15 +174,17 @@ namespace LiteNetLib
 
     internal sealed class NetConnectRequestPacket
     {
-        public const int HeaderSize = 13;
+        public const int HeaderSize = 14;
         public readonly long ConnectionTime;
         public readonly byte ConnectionNumber;
+        public readonly byte[] TargetAddress;
         public readonly NetDataReader Data;
 
-        private NetConnectRequestPacket(long connectionId, byte connectionNumber, NetDataReader data)
+        private NetConnectRequestPacket(long connectionTime, byte connectionNumber, byte[] targetAddress, NetDataReader data)
         {
-            ConnectionTime = connectionId;
+            ConnectionTime = connectionTime;
             ConnectionNumber = connectionNumber;
+            TargetAddress = targetAddress;
             Data = data;
         }
 
@@ -189,24 +200,34 @@ namespace LiteNetLib
 
             //Getting new id for peer
             long connectionId = BitConverter.ToInt64(packet.RawData, 5);
+            
+            //Get target address
+            int addrSize = packet.RawData[13];
+            if (addrSize != 16 && addrSize != 28)
+                return null;
+            byte[] addressBytes = new byte[addrSize];
+            Buffer.BlockCopy(packet.RawData, 14, addressBytes, 0, addrSize);
 
             // Read data and create request
             var reader = new NetDataReader(null, 0, 0);
-            if (packet.Size > HeaderSize)
-                reader.SetSource(packet.RawData, HeaderSize, packet.Size);
+            if (packet.Size > HeaderSize+addrSize)
+                reader.SetSource(packet.RawData, HeaderSize + addrSize, packet.Size);
 
-            return new NetConnectRequestPacket(connectionId, packet.ConnectionNumber, reader);
+            return new NetConnectRequestPacket(connectionId, packet.ConnectionNumber, addressBytes, reader);
         }
 
-        public static NetPacket Make(NetDataWriter connectData, long connectId)
+        public static NetPacket Make(NetDataWriter connectData, SocketAddress addressBytes, long connectId)
         {
             //Make initial packet
-            var packet = new NetPacket(PacketProperty.ConnectRequest, connectData.Length);
+            var packet = new NetPacket(PacketProperty.ConnectRequest, connectData.Length+addressBytes.Size);
 
             //Add data
             FastBitConverter.GetBytes(packet.RawData, 1, NetConstants.ProtocolId);
             FastBitConverter.GetBytes(packet.RawData, 5, connectId);
-            Buffer.BlockCopy(connectData.Data, 0, packet.RawData, HeaderSize, connectData.Length);
+            packet.RawData[13] = (byte)addressBytes.Size;
+            for (int i = 0; i < addressBytes.Size; i++)
+                packet.RawData[14+i] = addressBytes[i];
+            Buffer.BlockCopy(connectData.Data, 0, packet.RawData, 14+addressBytes.Size, connectData.Length);
             return packet;
         }
     }

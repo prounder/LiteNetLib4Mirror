@@ -2,6 +2,10 @@
 using System.Net;
 using System.Net.Sockets;
 
+#if NETSTANDARD || NETCOREAPP
+using System.Threading.Tasks;
+#endif
+
 namespace LiteNetLib.Utils
 {
     /// <summary>
@@ -10,8 +14,7 @@ namespace LiteNetLib.Utils
     /// 1. Create the object by <see cref="Create(IPEndPoint,Action&lt;NtpPacket&gt;)"/> method. 
     /// </para>
     /// <para>
-    /// 2. Use <see cref="Send"/> method to send requests. 3. Call <see cref="Close"/> to release the socket
-    /// AFTER you have received the response or some timeout. If you close the socket too early, you may miss the response.
+    /// 2. Use <see cref="Send"/> method to send requests.
     /// </para>
     /// <para>
     /// 3. Call <see cref="Close"/> to release the socket AFTER you have received the response or some timeout.
@@ -38,7 +41,12 @@ namespace LiteNetLib.Utils
 
             // Create and start socket
             _socket = new NetSocket(this);
-            _socket.Bind(IPAddress.Any, IPAddress.IPv6Any, 0, false, endPoint.AddressFamily == AddressFamily.InterNetworkV6);
+            _socket.Bind(
+                IPAddress.Any, 
+                IPAddress.IPv6Any, 
+                0, 
+                false, 
+                endPoint.AddressFamily == AddressFamily.InterNetworkV6 ? IPv6Mode.SeparateSocket : IPv6Mode.Disabled);
         }
 
         /// <summary>
@@ -85,9 +93,34 @@ namespace LiteNetLib.Utils
             return Create(endPoint, onRequestComplete);
         }
 
+#if NETSTANDARD || NETCOREAPP
+        /// <summary>
+        /// Requests asynchronously NTP server for time offset
+        /// </summary>
+        /// <param name="ntpServerAddress">NTP Server address.</param>
+        /// <returns>Scheduled task</returns>
+        public static async Task<NtpPacket> RequestAsync(string ntpServerAddress)
+        {
+            var t = new TaskCompletionSource<NtpPacket>();
+
+            await Task.Run(() =>
+            {
+                NtpRequest request = null;
+                request = Create(ntpServerAddress, (ntpPacket) =>
+                {
+                    request.Close();
+                    t.SetResult(ntpPacket);
+                });
+                request.Send();
+            });
+
+            return await t.Task;
+        }
+#endif
+
         /// <summary>
         /// Send request to the NTP server calls callback (if success).
-        /// In case of error the callbacke is called with null param.
+        /// In case of error the callback is called with null param.
         /// </summary>
         public void Send()
         {
@@ -107,7 +140,7 @@ namespace LiteNetLib.Utils
         /// </summary>
         public void Close()
         {
-            _socket.Close();
+            _socket.Close(false);
         }
 
         /// <summary>

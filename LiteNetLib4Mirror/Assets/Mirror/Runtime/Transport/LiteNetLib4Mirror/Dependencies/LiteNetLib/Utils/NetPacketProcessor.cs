@@ -64,10 +64,9 @@ namespace LiteNetLib.Utils
         /// Register nested property type
         /// </summary>
         /// <typeparam name="T">INetSerializable structure</typeparam>
-        /// <returns>True - if register successful, false - if type already registered</returns>
-        public bool RegisterNestedType<T>() where T : struct, INetSerializable
+        public void RegisterNestedType<T>() where T : struct, INetSerializable
         {
-            return _netSerializer.RegisterNestedType<T>();
+            _netSerializer.RegisterNestedType<T>();
         }
 
         /// <summary>
@@ -75,20 +74,18 @@ namespace LiteNetLib.Utils
         /// </summary>
         /// <param name="writeDelegate"></param>
         /// <param name="readDelegate"></param>
-        /// <returns>True - if register successful, false - if type already registered</returns>
-        public bool RegisterNestedType<T>(Action<NetDataWriter, T> writeDelegate, Func<NetDataReader, T> readDelegate)
+        public void RegisterNestedType<T>(Action<NetDataWriter, T> writeDelegate, Func<NetDataReader, T> readDelegate)
         {
-            return _netSerializer.RegisterNestedType<T>(writeDelegate, readDelegate);
+            _netSerializer.RegisterNestedType<T>(writeDelegate, readDelegate);
         }
 
         /// <summary>
         /// Register nested property type
         /// </summary>
         /// <typeparam name="T">INetSerializable class</typeparam>
-        /// <returns>True - if register successful, false - if type already registered</returns>
-        public bool RegisterNestedType<T>(Func<T> constructor) where T : class, INetSerializable
+        public void RegisterNestedType<T>(Func<T> constructor) where T : class, INetSerializable
         {
-            return _netSerializer.RegisterNestedType(constructor);
+            _netSerializer.RegisterNestedType(constructor);
         }
 
         /// <summary>
@@ -194,7 +191,7 @@ namespace LiteNetLib.Utils
         /// Register and subscribe to packet receive event
         /// </summary>
         /// <param name="onReceive">event that will be called when packet deserialized with ReadPacket method</param>
-        /// <param name="packetConstructor">Method that constructs packet intead of slow Activator.CreateInstance</param>
+        /// <param name="packetConstructor">Method that constructs packet instead of slow Activator.CreateInstance</param>
         /// <exception cref="InvalidTypeException"><typeparamref name="T"/>'s fields are not supported, or it has no fields</exception>
         public void Subscribe<T>(Action<T> onReceive, Func<T> packetConstructor) where T : class, new()
         {
@@ -211,7 +208,7 @@ namespace LiteNetLib.Utils
         /// Register and subscribe to packet receive event (with userData)
         /// </summary>
         /// <param name="onReceive">event that will be called when packet deserialized with ReadPacket method</param>
-        /// <param name="packetConstructor">Method that constructs packet intead of slow Activator.CreateInstance</param>
+        /// <param name="packetConstructor">Method that constructs packet instead of slow Activator.CreateInstance</param>
         /// <exception cref="InvalidTypeException"><typeparamref name="T"/>'s fields are not supported, or it has no fields</exception>
         public void Subscribe<T, TUserData>(Action<T, TUserData> onReceive, Func<T> packetConstructor) where T : class, new()
         {
@@ -226,7 +223,7 @@ namespace LiteNetLib.Utils
 
         /// <summary>
         /// Register and subscribe to packet receive event
-        /// This metod will overwrite last received packet class on receive (less garbage)
+        /// This method will overwrite last received packet class on receive (less garbage)
         /// </summary>
         /// <param name="onReceive">event that will be called when packet deserialized with ReadPacket method</param>
         /// <exception cref="InvalidTypeException"><typeparamref name="T"/>'s fields are not supported, or it has no fields</exception>
@@ -243,7 +240,7 @@ namespace LiteNetLib.Utils
 
         /// <summary>
         /// Register and subscribe to packet receive event
-        /// This metod will overwrite last received packet class on receive (less garbage)
+        /// This method will overwrite last received packet class on receive (less garbage)
         /// </summary>
         /// <param name="onReceive">event that will be called when packet deserialized with ReadPacket method</param>
         /// <exception cref="InvalidTypeException"><typeparamref name="T"/>'s fields are not supported, or it has no fields</exception>

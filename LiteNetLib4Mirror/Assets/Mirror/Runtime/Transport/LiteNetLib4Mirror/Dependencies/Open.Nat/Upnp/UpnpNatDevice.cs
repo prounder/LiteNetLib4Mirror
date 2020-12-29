@@ -78,6 +78,11 @@ namespace LiteNetLib4Mirror.Open.Nat
 		}
 #endif
 
+		public override IPAddress GetLocalIP()
+        {
+            return DeviceInfo.LocalAddress;
+        }
+
 #if !(NET_4_6 || NET_STANDARD_2_0)
 		public override Task CreatePortMapAsync(Mapping mapping)
 		{

@@ -94,6 +94,11 @@ namespace LiteNetLib4Mirror.Open.Nat
 				.TimeoutAfter(TimeSpan.FromSeconds(4));
 		}
 
+        public override IPAddress GetLocalIP()
+        {
+            return LocalAddress;
+        }
+
 		public override Task<Mapping> GetSpecificMappingAsync(NetworkProtocolType networkProtocolType, int port)
 		{
 			throw new NotSupportedException("NAT-PMP does not specify a way to get a specific port map");

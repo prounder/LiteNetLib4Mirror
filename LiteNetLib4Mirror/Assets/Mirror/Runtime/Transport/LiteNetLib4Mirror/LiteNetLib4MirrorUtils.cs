@@ -129,30 +129,25 @@ namespace Mirror.LiteNetLib4Mirror
 			return freeport;
 		}
 
-#pragma warning disable 4014
-		public static void ForwardPort(NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp, int milisecondsDelay = 10000)
+#pragma warning disable 4014		
+		public static void ForwardPort(NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp, int millisecondsDelay = 10000)
 		{
-			ForwardPortInternalAsync(LiteNetLib4MirrorTransport.Singleton.port, milisecondsDelay, networkProtocolType);
+			ForwardPortInternalAsync(LiteNetLib4MirrorTransport.Singleton.port, millisecondsDelay, networkProtocolType);
 		}
 
-		public static void ForwardPort(ushort port, NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp, int milisecondsDelay = 10000)
+		public static void ForwardPort(ushort port, NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp, int millisecondsDelay = 10000)
 		{
-			ForwardPortInternalAsync(port, milisecondsDelay, networkProtocolType);
+			ForwardPortInternalAsync(port, millisecondsDelay, networkProtocolType);
 		}
 #pragma warning restore 4014
 
-		private static async Task ForwardPortInternalAsync(ushort port, int milisecondsDelay, NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp)
+		private static async Task ForwardPortInternalAsync(ushort port, int millisecondsDelay, NetworkProtocolType networkProtocolType = NetworkProtocolType.Udp)
 		{
 			try
 			{
 				if (LastForwardedPort == port || UpnpFailed) return;
 				if (LastForwardedPort != 0) NatDiscoverer.ReleaseAll();
-				NatDiscoverer discoverer = new NatDiscoverer();
-				NatDevice device;
-				using (CancellationTokenSource cts = new CancellationTokenSource(milisecondsDelay))
-				{
-					device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp | PortMapper.Pmp, cts).ConfigureAwait(false);
-				}
+				NatDevice device = await GetNatDeviceAsync(millisecondsDelay).ConfigureAwait(false);
 
 				ExternalIp = await device.GetExternalIPAsync();
 				await device.CreatePortMapAsync(new Mapping(networkProtocolType, IPAddress.None, port, port, 0, ApplicationName)).ConfigureAwait(false);
@@ -164,6 +159,21 @@ namespace Mirror.LiteNetLib4Mirror
 				Debug.LogWarning($"UPnP failed!\n{ex.Message}\n{ex.StackTrace}");
 				UpnpFailed = true;
 			}
+		}
+
+		private static async Task<NatDevice> GetNatDeviceAsync(int millisecondsDelay) {
+			NatDiscoverer discoverer = new NatDiscoverer();
+			NatDevice device;
+			using (CancellationTokenSource cts = new CancellationTokenSource(millisecondsDelay))
+			{
+				device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp | PortMapper.Pmp, cts).ConfigureAwait(false);
+			}
+			return device;
+		}
+
+		public static async Task<IPAddress> GetLocalIP() {
+			NatDevice natDevice = await GetNatDeviceAsync(10000).ConfigureAwait(false);
+			return natDevice.GetLocalIP();
 		}
 	}
 }

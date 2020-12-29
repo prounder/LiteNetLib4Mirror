@@ -48,7 +48,7 @@ namespace Mirror.LiteNetLib4Mirror
 		internal static void SetOptions(bool server)
 		{
 #if !DISABLE_IPV6
-			Host.IPv6Enabled = LiteNetLib4MirrorTransport.Singleton.ipv6Enabled;
+			Host.IPv6Enabled = LiteNetLib4MirrorTransport.Singleton.ipv6Enabled ? IPv6Mode.SeparateSocket : IPv6Mode.Disabled;
 #endif
 			Host.UpdateTime = LiteNetLib4MirrorTransport.Singleton.updateTime;
 			Host.PingInterval = LiteNetLib4MirrorTransport.Singleton.pingInterval;
@@ -72,7 +72,6 @@ namespace Mirror.LiteNetLib4Mirror
 			if (Host != null)
 			{
 				LiteNetLib4MirrorServer.Peers = null;
-				Host.Flush();
 				Host.Stop();
 				Host = null;
 				LiteNetLib4MirrorTransport.Polling = false;
